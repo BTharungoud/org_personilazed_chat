@@ -1,0 +1,25 @@
+8th Feb 2026 - Review
+
+Onboarding Process for Company
+Registration Page
+Add CompanyId
+Add DeptId
+Add username
+Admin Should be able to select departments
+Need to figure out for admin user, and also special access for different users
+Login Page
+Need to implement token extraction for company Id and department id. 
+Need to call backend login page and in the backend need to store in the separate table
+Need to show login user name on top right (currently showing just user)
+
+Chat
+Should be able to select different models
+Currently attach multiple files option is coming as big for normal user as well. Make it as small as possible like bleow. 
+How about ingest feature for admin? Will there be a separate interface/page to feed several files? We also need to figure out if they want us to read from confluence pages or any other pages. For suppose, if those documents got updated, we need to feed them in batches. 
+For the history, need to create separate endpoint? Or will you store in cache?
+
+
+
+
+
+
