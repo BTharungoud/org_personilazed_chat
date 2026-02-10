@@ -8,16 +8,23 @@ Add username
 Admin Should be able to select departments
 Need to figure out for admin user, and also special access for different users
 Login Page
-Need to implement token extraction for company Id and department id. 
+Need to implement token extraction for company Id and department id.
 Need to call backend login page and in the backend need to store in the separate table
 Need to show login user name on top right (currently showing just user)
+#################### the above points need discussion ####################
 
-Chat
-Should be able to select different models
-Currently attach multiple files option is coming as big for normal user as well. Make it as small as possible like bleow. 
-How about ingest feature for admin? Will there be a separate interface/page to feed several files? We also need to figure out if they want us to read from confluence pages or any other pages. For suppose, if those documents got updated, we need to feed them in batches. 
-For the history, need to create separate endpoint? Or will you store in cache?
+#################### Done ####################
+Chat =>
+ i. Done - Should be able to select different models
+ ii. Done - Currently attach multiple files option is coming as big for normal user as well. Make it as small as possible like bleow.
+ iii. How about ingest feature for admin? Will there be a separate interface/page to feed several files?
+ Ans :- will use the same component as much as possible but will check this in a discussion (current interface will support our requirement).
 
+ Vi. We also need to figure out if they want us to read from confluence pages or any other pages. For suppose, if those documents got updated, we need to feed them in batches.
+ Ans :- yes, clearly this would be need a cron execution, where we provide a schedular that will complete the bulk upload of data to database.
+
+ V.For the history, need to create separate endpoint? Or will you store in cache?
+ Ans :- I guess we need to use another endpoint with sockets, cache will be applied in the endpoint level.
 
 
 

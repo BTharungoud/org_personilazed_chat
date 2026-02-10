@@ -13,6 +13,7 @@ import {
   Settings,
   Bell,
   Sparkles,
+  Paperclip,
 } from 'lucide-react'
 import './Dashboard.css'
 
@@ -69,10 +70,15 @@ export default function Dashboard() {
   const [files, setFiles] = useState<File[]>([])
   const [dragActive, setDragActive] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [selectedModel, setSelectedModel] = useState('auto')
+  const [showModelMenu, setShowModelMenu] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const departmentDropdownRef = useRef<HTMLDivElement>(null)
+  const modelDropdownRef = useRef<HTMLDivElement>(null)
   const userName = localStorage.getItem('userName') || 'User'
+
+  const MODEL_OPTIONS = ['auto', 'gemini', 'openai', 'claude']
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -90,15 +96,21 @@ export default function Dashboard() {
       ) {
         setShowDepartmentMenu(false)
       }
+      if (
+        modelDropdownRef.current &&
+        !modelDropdownRef.current.contains(event.target as Node)
+      ) {
+        setShowModelMenu(false)
+      }
     }
 
-    if (showDepartmentMenu) {
+    if (showDepartmentMenu || showModelMenu) {
       document.addEventListener('mousedown', handleClickOutside)
       return () => {
         document.removeEventListener('mousedown', handleClickOutside)
       }
     }
-  }, [showDepartmentMenu])
+  }, [showDepartmentMenu, showModelMenu])
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault()
@@ -292,7 +304,13 @@ export default function Dashboard() {
 
         {/* Chat Area */}
         <div className="chat-wrapper">
-          <div className="messages-container">
+          <div
+            className={`messages-container ${dragActive ? 'drag-active' : ''}`}
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+          >
             {messages.length === 0 && (
               <div className="empty-state">
                 <div className="empty-icon">
@@ -391,65 +409,57 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* File Upload Area */}
-            <div
-              className={`file-upload-area ${dragActive ? 'drag-active' : ''}`}
-              onDragEnter={handleDrag}
-              onDragLeave={handleDrag}
-              onDragOver={handleDrag}
-              onDrop={handleDrop}
-            >
-              {files.length === 0 ? (
-                <>
-                  <Upload size={20} />
-                  <span>Drag files here or</span>
-                  <button
-                    type="button"
-                    className="upload-link"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    browse
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    onChange={handleFileSelect}
-                    style={{ display: 'none' }}
-                  />
-                </>
-              ) : (
-                <div className="file-list">
-                  {files.map((file, idx) => (
-                    <div key={idx} className="file-item">
-                      <Upload size={16} />
-                      <span className="file-name">
-                        {file.name.length > 30
-                          ? file.name.substring(0, 30) + '...'
-                          : file.name}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeFile(idx)}
-                        className="remove-file"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    className="add-more-files"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    + Add more
-                  </button>
-                </div>
-              )}
-            </div>
+            {/* File List (if any files selected) */}
+            {files.length > 0 && (
+              <div className="file-list-compact">
+                {files.map((file, idx) => (
+                  <div key={idx} className="file-badge-compact">
+                    <span className="file-name-compact">
+                      {file.name.length > 25
+                        ? file.name.substring(0, 25) + '...'
+                        : file.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeFile(idx)}
+                      className="remove-file-compact"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
 
-            {/* Message Input */}
+            {/* Message Input Form with Model Selector and File Upload */}
             <form className="message-input-form" onSubmit={handleSendMessage}>
+              {/* File Upload Button */}
+              <div
+                className={`file-upload-compact ${dragActive ? 'drag-active' : ''}`}
+                onDragEnter={handleDrag}
+                onDragLeave={handleDrag}
+                onDragOver={handleDrag}
+                onDrop={handleDrop}
+              >
+                <button
+                  type="button"
+                  className="file-upload-button"
+                  onClick={() => fileInputRef.current?.click()}
+                  title={`${files.length} file(s) selected`}
+                >
+                  <Paperclip size={18} />
+                  {files.length > 0 && <span className="file-count">{files.length}</span>}
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  onChange={handleFileSelect}
+                  style={{ display: 'none' }}
+                />
+              </div>
+
+              {/* Message Input */}
               <input
                 type="text"
                 placeholder="Type your message here..."
@@ -458,6 +468,39 @@ export default function Dashboard() {
                 disabled={loading}
                 className="message-input"
               />
+
+              {/* Model Selector Dropdown */}
+              <div className="model-dropdown-compact" ref={modelDropdownRef}>
+                <button
+                  type="button"
+                  className="model-button"
+                  onClick={() => setShowModelMenu(!showModelMenu)}
+                  title="Select AI Model"
+                >
+                  <span className="model-label">{selectedModel}</span>
+                  <ChevronDown size={16} />
+                </button>
+
+                {showModelMenu && (
+                  <div className="model-menu">
+                    {MODEL_OPTIONS.map(model => (
+                      <button
+                        key={model}
+                        type="button"
+                        className={`model-item ${selectedModel === model ? 'active' : ''}`}
+                        onClick={() => {
+                          setSelectedModel(model)
+                          setShowModelMenu(false)
+                        }}
+                      >
+                        {model.charAt(0).toUpperCase() + model.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Send Button */}
               <button
                 type="submit"
                 disabled={loading || (!inputValue.trim() && files.length === 0)}
