@@ -75,6 +75,20 @@ npm run dev
 http://localhost:5173
 ```
 
+### Environment Variables
+
+Create a local `.env` file from `.env.example` and adjust these values as needed:
+
+- `API_BASE_URL` - Backend server URL, for example `http://localhost:8081`
+- `API_JWT_TOKEN` - Optional development JWT used when the backend does not return one yet
+- `API_TIMEOUT_MS` - Axios timeout in milliseconds
+- `APP_NAME` - Display name used in the UI
+- `DEFAULT_AGENT_MODEL` - Default model sent to the chat endpoint
+
+The app calls the backend URL directly from the browser using `API_BASE_URL`. Make sure the backend allows requests from `http://localhost:5173` and `http://127.0.0.1:5173` during local development.
+
+If `/department` or `/role` return `401` or `403`, set `API_JWT_TOKEN` in `.env` with a valid backend token. The register page uses those endpoints to load department and role options.
+
 ## Running the Application
 
 ### Development Mode
@@ -130,6 +144,7 @@ src/
 - File attachment support
 - Chat history management
 - Create/delete conversations
+- API-driven chat generation, uploads, department lookup, and settings sync
 
 ## Browser Support
 

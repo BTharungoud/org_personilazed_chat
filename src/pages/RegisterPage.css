@@ -1,14 +1,13 @@
 .register-container {
-  min-height: 100vh;
+  min-height: 100dvh;
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, #0f172a 0%, #1a2949 50%, #0f172a 100%);
   position: relative;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 20px 0;
+  overflow: visible;
+  padding: clamp(20px, 4vw, 48px) 16px;
 }
 
 .register-glow {
@@ -27,18 +26,17 @@
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 420px;
-  padding: 20px;
+  max-width: 480px;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 40px;
+  gap: 24px;
 }
 
 .register-brand {
   display: flex;
   align-items: center;
   gap: 12px;
-  /* margin-bottom: 10px; */
 }
 
 .brand-icon {
@@ -75,14 +73,15 @@
 }
 
 .register-form {
-  background: rgba(30, 58, 95, 0.5);
+  background: var(--surface-elevated);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(51, 65, 85, 0.5);
-  border-radius: 16px;
-  padding: 32px;
+  border: 1px solid var(--border-color);
+  border-radius: 22px;
+  padding: clamp(24px, 4vw, 34px);
   display: flex;
   flex-direction: column;
   gap: 24px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.35);
 }
 
 .register-form h2 {
@@ -99,8 +98,8 @@
 
 .error-message {
   background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.5);
-  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fecaca;
   padding: 12px;
   border-radius: 8px;
   font-size: 14px;
@@ -123,21 +122,22 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid #334155;
-  border-radius: 10px;
-  padding: 0 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 0 14px;
+  min-height: 52px;
   transition: all 0.3s ease;
 }
 
 .input-wrapper:focus-within {
   border-color: #8b5cf6;
-  background: rgba(139, 92, 246, 0.05);
-  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.1);
+  background: rgba(139, 92, 246, 0.08);
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.12);
 }
 
 .input-wrapper svg {
-  color: #64748b;
+  color: var(--text-tertiary);
   flex-shrink: 0;
 }
 
@@ -145,19 +145,150 @@
   flex: 1;
   background: transparent;
   border: none;
-  padding: 12px 0;
+  padding: 14px 0;
   font-size: 14px;
-  color: #e2e8f0;
+  color: var(--text-primary);
+}
+
+.input-wrapper select {
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 14px 0;
+  font-size: 14px;
+  color: var(--text-primary);
+  appearance: none;
 }
 
 .input-wrapper input::placeholder {
-  color: #64748b;
+  color: var(--text-tertiary);
+}
+
+.input-wrapper input:-webkit-autofill,
+.input-wrapper input:-webkit-autofill:hover,
+.input-wrapper input:-webkit-autofill:focus,
+.input-wrapper select:-webkit-autofill,
+.catalog-trigger:-webkit-autofill {
+  -webkit-text-fill-color: var(--text-primary);
+  -webkit-box-shadow: 0 0 0 1000px rgba(15, 23, 42, 0.92) inset;
+  box-shadow: 0 0 0 1000px rgba(15, 23, 42, 0.92) inset;
+  transition: background-color 9999s ease-in-out 0s;
 }
 
 .hint {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-tertiary);
   margin-top: -4px;
+}
+
+.catalog-message {
+  background: var(--accent-soft);
+  border: 1px solid rgba(59, 130, 246, 0.22);
+  color: #bfdbfe;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.catalog-dropdown {
+  position: relative;
+}
+
+.catalog-trigger {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.catalog-trigger:focus-visible,
+.catalog-trigger:hover:not(:disabled) {
+  border-color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.08);
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.12);
+}
+
+.catalog-trigger:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.catalog-value {
+  flex: 1;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 14px;
+}
+
+.catalog-value.placeholder {
+  color: var(--text-tertiary);
+}
+
+.catalog-trigger svg {
+  color: var(--text-tertiary);
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.catalog-trigger:hover:not(:disabled) svg {
+  color: #c4b5fd;
+}
+
+.catalog-trigger svg.rotated {
+  transform: rotate(180deg);
+}
+
+.catalog-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  border-radius: 16px;
+  border: 1px solid rgba(51, 65, 85, 0.9);
+  background: var(--surface-overlay);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.45);
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.catalog-option {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 12px;
+  padding: 11px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+  font-size: 14px;
+}
+
+.catalog-option:hover {
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+.catalog-option.active {
+  background: rgba(139, 92, 246, 0.16);
+  color: var(--text-primary);
 }
 
 .register-button {
@@ -278,15 +409,24 @@
   left: 50%;
 }
 
-@media (max-width: 480px) {
-  .register-content {
-    max-width: 100%;
-    padding: 20px;
-    gap: 30px;
+@media (max-width: 768px) {
+  .register-container {
+    align-items: flex-start;
   }
 
+  .register-content {
+    max-width: 100%;
+    gap: 20px;
+  }
+
+  .register-brand {
+    margin-bottom: 0;
+  }
+}
+
+@media (max-width: 480px) {
   .register-form {
-    padding: 24px;
+    padding: 22px;
   }
 
   .register-brand h1 {
@@ -300,5 +440,13 @@
   .brand-icon svg {
     width: 32px;
     height: 32px;
+  }
+
+  .register-form h2 {
+    font-size: 22px;
+  }
+
+  .catalog-menu {
+    max-height: 210px;
   }
 }

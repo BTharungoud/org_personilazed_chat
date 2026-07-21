@@ -1,31 +1,76 @@
-import { useState } from 'react'
+import axios from 'axios'
+import { useEffect, useState } from 'react'
+import type { FormEvent } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { Mail, Lock, ArrowRight, Sparkles } from 'lucide-react'
+import { appConfig } from '../config/appConfig'
+import {
+  authService,
+  extractAuthSession,
+  extractMessage,
+  persistAuthSession,
+  systemService,
+} from '../services'
 import './LoginPage.css'
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [apiStatus, setApiStatus] = useState<'checking' | 'online' | 'offline'>(
+    'checking',
+  )
   const navigate = useNavigate()
 
-  const handleLogin = async (e: React.FormEvent) => {
+  useEffect(() => {
+    let isMounted = true
+
+    systemService
+      .healthCheck()
+      .then(() => {
+        if (isMounted) setApiStatus('online')
+      })
+      .catch(() => {
+        if (isMounted) setApiStatus('offline')
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setLoading(true)
     setError('')
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      const response = await authService.login({ username, password })
+      const session = extractAuthSession(response.data)
+      const token = session.token || appConfig.api.jwtToken
 
-      if (email && password) {
-        localStorage.setItem('authToken', 'dummy_token_' + Date.now())
-        localStorage.setItem('userEmail', email)
-        navigate('/dashboard')
+      if (!token) {
+        throw new Error('Login succeeded, but no token was returned by the backend.')
       }
+
+      persistAuthSession({
+        token,
+        userId: session.userId || appConfig.defaults.userId,
+        userName: session.userName || username,
+        userEmail: session.userEmail || username,
+      })
+
+      navigate('/dashboard')
     } catch (err) {
-      setError('Login failed. Please try again.')
+      const fallback = 'Login failed. Please try again.'
+      setError(
+        axios.isAxiosError(err)
+          ? extractMessage(err.response?.data ?? err.message, fallback)
+          : err instanceof Error
+            ? err.message
+            : fallback,
+      )
     } finally {
       setLoading(false)
     }
@@ -34,36 +79,37 @@ export default function LoginPage() {
   return (
     <div className="login-container">
       <div className="login-glow"></div>
-      
+
       <div className="login-content">
-        {/* Brand Section */}
         <div className="login-brand">
           <div className="brand-icon">
             <Sparkles size={40} />
           </div>
           <div className="brand-text">
-            <h1>PersonalChat</h1>
+            <h1>{appConfig.appName}</h1>
             <p>Start Your AI Journey</p>
           </div>
         </div>
 
-        {/* Login Form */}
         <form className="login-form" onSubmit={handleLogin}>
           <h2>Welcome Back</h2>
           <p className="form-subtitle">Sign in to continue your conversation</p>
+          <p className={`api-status api-status-${apiStatus}`}>
+            API status: {apiStatus}
+          </p>
 
           {error && <div className="error-message">{error}</div>}
 
           <div className="form-group">
-            <label htmlFor="email">Email Address</label>
+            <label htmlFor="username">Username</label>
             <div className="input-wrapper">
               <Mail size={20} />
               <input
-                type="email"
-                id="email"
-                placeholder="your@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                type="text"
+                id="username"
+                placeholder="testuser"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
               />
             </div>
@@ -76,7 +122,7 @@ export default function LoginPage() {
               <input
                 type="password"
                 id="password"
-                placeholder="••••••••"
+                placeholder="********"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -84,11 +130,7 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <button
-            type="submit"
-            className="login-button"
-            disabled={loading}
-          >
+          <button type="submit" className="login-button" disabled={loading}>
             {loading ? (
               <>
                 <span className="spinner"></span>
@@ -107,14 +149,13 @@ export default function LoginPage() {
           </div>
 
           <p className="signup-prompt">
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
             <Link to="/register" className="signup-link">
               Create one now
             </Link>
           </p>
         </form>
 
-        {/* Feature Highlights */}
         <div className="features-highlight">
           <div className="feature-item">
             <div className="feature-dot"></div>
@@ -131,7 +172,6 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Decorative Elements */}
       <div className="decoration decoration-1"></div>
       <div className="decoration decoration-2"></div>
       <div className="decoration decoration-3"></div>

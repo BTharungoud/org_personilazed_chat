@@ -1,4 +1,6 @@
-import { useState, useRef, useEffect } from 'react'
+import axios from 'axios'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { ChangeEvent, DragEvent, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Menu,
@@ -15,6 +17,23 @@ import {
   Sparkles,
   Paperclip,
 } from 'lucide-react'
+import { appConfig } from '../config/appConfig'
+import {
+  chatService,
+  clearAuthSession,
+  extractList,
+  extractMessage,
+  extractModelText,
+  getStoredDepartmentName,
+  getStoredRoleName,
+  getStoredUserEmail,
+  getStoredUserId,
+  getStoredUserName,
+  referenceService,
+  settingsService,
+  updateStoredProfile,
+} from '../services'
+import type { ChatHistoryRecord, Department, SettingsRecord } from '../types/api'
 import './Dashboard.css'
 
 interface ChatMessage {
@@ -32,61 +51,152 @@ interface ChatSession {
   messages: ChatMessage[]
 }
 
-const DEPARTMENTS = [
-  'Support',
-  'Billing',
-  'Technical',
-  'Sales',
-  'Product',
-  'HR',
-  'Legal',
-  'Operations',
-]
+const MODEL_OPTIONS = Array.from(
+  new Set([appConfig.defaults.agentModel, 'auto', 'gemini', 'openai', 'claude']),
+)
+
+const toDate = (value: unknown) => {
+  if (!value) return new Date()
+  const parsed = new Date(String(value))
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed
+}
+
+const normalizeHistoryMessages = (
+  messages: Array<Record<string, unknown>> | undefined,
+): ChatMessage[] =>
+  (messages ?? []).map((message, index) => {
+    const senderValue = String(message.sender ?? message.role ?? '').toLowerCase()
+    return {
+      id: String(message.id ?? index),
+      text: String(message.text ?? message.message ?? message.content ?? ''),
+      sender:
+        senderValue === 'bot' || senderValue === 'assistant' ? 'bot' : 'user',
+      timestamp: toDate(message.timestamp ?? message.createdAt ?? message.updatedAt),
+    }
+  })
+
+const normalizeChatSessions = (records: ChatHistoryRecord[]) => {
+  if (records.length === 0) {
+    return []
+  }
+
+  return records.map((record, index) => ({
+    id: String(record.id ?? index + 1),
+    title:
+      String(record.title ?? record.subject ?? record.name ?? '').trim() ||
+      `Conversation ${index + 1}`,
+    timestamp: toDate(record.updatedAt ?? record.createdAt ?? record.timestamp),
+    messages: normalizeHistoryMessages(record.messages),
+  }))
+}
+
+const buildFallbackBotMessage = (
+  messageText: string,
+  departments: string[],
+  fileCount: number,
+) => {
+  const departmentLabel = departments.length > 0 ? departments.join(', ') : 'General'
+  const fileLabel = fileCount > 0 ? ` Received ${fileCount} file(s) for ingestion.` : ''
+  return `Thanks for your message about "${messageText}". I am processing it across ${departmentLabel}.${fileLabel}`
+}
 
 export default function Dashboard() {
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [chatSessions, setChatSessions] = useState<ChatSession[]>([
-    {
-      id: '1',
-      title: 'Project Discussion',
-      timestamp: new Date(Date.now() - 86400000),
-      messages: [],
-    },
-    {
-      id: '2',
-      title: 'Q&A Session',
-      timestamp: new Date(Date.now() - 172800000),
-      messages: [],
-    },
-  ])
-  const [activeChatId, setActiveChatId] = useState('1')
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
+  const [activeChatId, setActiveChatId] = useState('')
   const [inputValue, setInputValue] = useState('')
-  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([
-    'Support',
-  ])
+  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
   const [showDepartmentMenu, setShowDepartmentMenu] = useState(false)
   const [files, setFiles] = useState<File[]>([])
   const [dragActive, setDragActive] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [selectedModel, setSelectedModel] = useState('auto')
+  const [selectedModel, setSelectedModel] = useState(appConfig.defaults.agentModel)
   const [showModelMenu, setShowModelMenu] = useState(false)
+  const [showProfilePanel, setShowProfilePanel] = useState(false)
+  const [apiError, setApiError] = useState('')
+  const [darkModeEnabled, setDarkModeEnabled] = useState(true)
+  const [profileName, setProfileName] = useState(getStoredUserName())
+  const [profileEmail, setProfileEmail] = useState(getStoredUserEmail())
+  const [profileDepartment, setProfileDepartment] = useState(getStoredDepartmentName())
+  const [profileRole, setProfileRole] = useState(getStoredRoleName())
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const departmentDropdownRef = useRef<HTMLDivElement>(null)
   const modelDropdownRef = useRef<HTMLDivElement>(null)
-  const userName = localStorage.getItem('userName') || 'User'
+  const userId = getStoredUserId()
+  const userName = profileName || getStoredUserName()
+  const headerDepartment = profileDepartment || selectedDepartments[0] || 'Department not set'
 
-  const MODEL_OPTIONS = ['auto', 'gemini', 'openai', 'claude']
+  const activeSession = useMemo(
+    () => chatSessions.find(session => session.id === activeChatId) ?? chatSessions[0],
+    [activeChatId, chatSessions],
+  )
+
+  const messages = activeSession?.messages ?? []
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
+  const updateSessionMessages = (
+    sessionId: string,
+    updater: (current: ChatMessage[]) => ChatMessage[],
+  ) => {
+    setChatSessions(previousSessions =>
+      previousSessions.some(session => session.id === sessionId)
+        ? previousSessions.map(session =>
+            session.id === sessionId
+              ? {
+                  ...session,
+                  messages: updater(session.messages),
+                  timestamp: new Date(),
+                }
+              : session,
+          )
+        : [
+            {
+              id: sessionId,
+              title: 'New Conversation',
+              timestamp: new Date(),
+              messages: updater([]),
+            },
+            ...previousSessions,
+          ],
+    )
+  }
+
+  const ensureActiveSession = () => {
+    if (chatSessions.some(session => session.id === activeChatId)) {
+      return activeChatId
+    }
+
+    const firstSession = chatSessions[0]
+    if (firstSession) {
+      setActiveChatId(firstSession.id)
+      return firstSession.id
+    }
+
+    const newSessionId = Date.now().toString()
+    const newSession: ChatSession = {
+      id: newSessionId,
+      title: 'New Conversation',
+      timestamp: new Date(),
+      messages: [],
+    }
+    setChatSessions([newSession])
+    setActiveChatId(newSessionId)
+    return newSessionId
+  }
+
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = darkModeEnabled ? 'dark' : 'light'
+  }, [darkModeEnabled])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -96,10 +206,7 @@ export default function Dashboard() {
       ) {
         setShowDepartmentMenu(false)
       }
-      if (
-        modelDropdownRef.current &&
-        !modelDropdownRef.current.contains(event.target as Node)
-      ) {
+      if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target as Node)) {
         setShowModelMenu(false)
       }
     }
@@ -112,7 +219,69 @@ export default function Dashboard() {
     }
   }, [showDepartmentMenu, showModelMenu])
 
-  const handleDrag = (e: React.DragEvent) => {
+  useEffect(() => {
+    let isMounted = true
+
+    Promise.allSettled([
+      chatService.getHistoryByUser(userId),
+      referenceService.listDepartments(),
+      settingsService.getByUser(userId),
+    ]).then(([historyResult, departmentsResult, settingsResult]) => {
+      if (!isMounted) return
+
+      if (historyResult.status === 'fulfilled') {
+        const historyRecords = extractList<ChatHistoryRecord>(historyResult.value.data)
+        const sessions = normalizeChatSessions(historyRecords)
+        setChatSessions(sessions)
+        setActiveChatId(sessions[0]?.id ?? '')
+      }
+
+      if (departmentsResult.status === 'fulfilled') {
+        const departmentList = extractList<Department>(departmentsResult.value.data)
+        if (departmentList.length > 0) {
+          setDepartments(departmentList)
+          const preferredDepartment =
+            profileDepartment &&
+            departmentList.some(
+              department =>
+                (department.name || `Department ${department.id}`) === profileDepartment,
+            )
+              ? profileDepartment
+              : departmentList[0].name || `Department ${departmentList[0].id}`
+          setSelectedDepartments([preferredDepartment])
+        } else {
+          setDepartments([])
+          setSelectedDepartments([])
+        }
+      }
+
+      if (settingsResult.status === 'fulfilled') {
+        const settings = settingsResult.value.data as SettingsRecord
+        if (typeof settings.darkMode === 'boolean') {
+          setDarkModeEnabled(settings.darkMode)
+        }
+      }
+    })
+
+    return () => {
+      isMounted = false
+    }
+  }, [profileDepartment, userId])
+
+  useEffect(() => {
+    if (selectedDepartments.length === 0 && departments.length > 0) {
+      const preferredDepartment =
+        profileDepartment &&
+        departments.some(
+          department => (department.name || `Department ${department.id}`) === profileDepartment,
+        )
+          ? profileDepartment
+          : departments[0].name || `Department ${departments[0].id}`
+      setSelectedDepartments([preferredDepartment])
+    }
+  }, [departments, profileDepartment, selectedDepartments.length])
+
+  const handleDrag = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     e.stopPropagation()
     if (e.type === 'dragenter' || e.type === 'dragover') {
@@ -122,63 +291,31 @@ export default function Dashboard() {
     }
   }
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     e.stopPropagation()
     setDragActive(false)
 
     const droppedFiles = Array.from(e.dataTransfer.files)
-    setFiles(prev => [...prev, ...droppedFiles])
+    setFiles(previousFiles => [...previousFiles, ...droppedFiles])
   }
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setFiles(prev => [...prev, ...Array.from(e.target.files!)])
+      setFiles(previousFiles => [...previousFiles, ...Array.from(e.target.files ?? [])])
     }
   }
 
   const removeFile = (index: number) => {
-    setFiles(prev => prev.filter((_, i) => i !== index))
+    setFiles(previousFiles => previousFiles.filter((_, currentIndex) => currentIndex !== index))
   }
 
-  const toggleDepartment = (dept: string) => {
-    setSelectedDepartments(prev =>
-      prev.includes(dept)
-        ? prev.filter(d => d !== dept)
-        : [...prev, dept]
+  const toggleDepartment = (departmentName: string) => {
+    setSelectedDepartments(previousDepartments =>
+      previousDepartments.includes(departmentName)
+        ? previousDepartments.filter(department => department !== departmentName)
+        : [...previousDepartments, departmentName],
     )
-  }
-
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!inputValue.trim() && files.length === 0) return
-
-    setLoading(true)
-
-    // Add user message
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      text: inputValue,
-      sender: 'user',
-      timestamp: new Date(),
-      files: files.map(f => f.name),
-    }
-
-    setMessages(prev => [...prev, userMessage])
-    setInputValue('')
-    setFiles([])
-
-    // Simulate bot response
-    setTimeout(() => {
-      const botMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        text: `Thanks for your message about: "${inputValue}". I'm processing your query across the ${selectedDepartments.join(', ')} department(s). ${files.length > 0 ? `I've received ${files.length} file(s) for analysis.` : ''}`,
-        sender: 'bot',
-        timestamp: new Date(),
-      }
-      setMessages(prev => [...prev, botMessage])
-      setLoading(false)
-    }, 1500)
   }
 
   const createNewChat = () => {
@@ -188,36 +325,189 @@ export default function Dashboard() {
       timestamp: new Date(),
       messages: [],
     }
-    setChatSessions(prev => [newChat, ...prev])
+    setChatSessions(previousSessions => [newChat, ...previousSessions])
     setActiveChatId(newChat.id)
-    setMessages([])
+    setApiError('')
   }
 
   const deleteChat = (id: string) => {
-    setChatSessions(prev => prev.filter(chat => chat.id !== id))
-    if (activeChatId === id) {
-      const remaining = chatSessions.filter(chat => chat.id !== id)
-      if (remaining.length > 0) {
+    setChatSessions(previousSessions => {
+      const remaining = previousSessions.filter(chat => chat.id !== id)
+      if (remaining.length === 0) {
+        setActiveChatId('')
+        return []
+      }
+
+      if (activeChatId === id) {
         setActiveChatId(remaining[0].id)
       }
-    }
+
+      return remaining
+    })
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('authToken')
-    localStorage.removeItem('userEmail')
-    localStorage.removeItem('userName')
+    clearAuthSession()
     navigate('/login')
+  }
+
+  const handleSaveProfile = () => {
+    const trimmedName = profileName.trim()
+    const trimmedEmail = profileEmail.trim()
+    const trimmedDepartment = profileDepartment.trim()
+    const trimmedRole = profileRole.trim()
+
+    updateStoredProfile({
+      userName: trimmedName || userName,
+      userEmail: trimmedEmail,
+      departmentName: trimmedDepartment,
+      roleName: trimmedRole,
+    })
+
+    if (trimmedName) {
+      setProfileName(trimmedName)
+    }
+
+    if (trimmedEmail) {
+      setProfileEmail(trimmedEmail)
+    }
+
+    setProfileDepartment(trimmedDepartment)
+    setProfileRole(trimmedRole)
+
+    if (trimmedDepartment) {
+      if (trimmedDepartment) {
+        setSelectedDepartments([trimmedDepartment])
+      }
+    }
+
+    setShowProfilePanel(false)
+  }
+
+  const handleToggleDarkMode = async () => {
+    const nextMode = !darkModeEnabled
+    setDarkModeEnabled(nextMode)
+    try {
+      await settingsService.toggleDarkMode(userId)
+    } catch (err) {
+      setDarkModeEnabled(!nextMode)
+      setApiError(
+        axios.isAxiosError(err)
+          ? extractMessage(err.response?.data ?? err.message, 'Failed to update settings.')
+          : 'Failed to update settings.',
+      )
+    }
+  }
+
+  const handleSendMessage = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+
+    const trimmedMessage = inputValue.trim()
+    if (!trimmedMessage && files.length === 0) return
+
+    const sessionId = ensureActiveSession()
+    const attachedFiles = [...files]
+    const selectedDepartmentLabel = selectedDepartments.join(', ') || 'General'
+    const userMessage: ChatMessage = {
+      id: `${Date.now()}`,
+      text: trimmedMessage || 'Uploaded files for review.',
+      sender: 'user',
+      timestamp: new Date(),
+      files: attachedFiles.map(file => file.name),
+    }
+
+    setLoading(true)
+    setApiError('')
+    setInputValue('')
+    setFiles([])
+
+    updateSessionMessages(sessionId, currentMessages => {
+      const nextMessages = [...currentMessages, userMessage]
+      if (currentMessages.length === 0) {
+        setChatSessions(previousSessions =>
+          previousSessions.map(session =>
+            session.id === sessionId
+              ? { ...session, title: trimmedMessage.slice(0, 40) || 'New Conversation' }
+              : session,
+          ),
+        )
+      }
+      return nextMessages
+    })
+
+    try {
+      if (attachedFiles.length === 1) {
+        await chatService.ingestFile(attachedFiles[0])
+      } else if (attachedFiles.length > 1) {
+        await chatService.ingestMultipleFiles(attachedFiles)
+      }
+
+      let replyText = ''
+
+      try {
+        const generationResponse = await chatService.generate({
+          userId,
+          message: trimmedMessage || userMessage.text,
+          agentSelected: selectedModel,
+          category: selectedDepartmentLabel,
+        })
+
+        replyText =
+          extractModelText(generationResponse.data) ||
+          extractMessage(generationResponse.data, '')
+      } catch (generationError) {
+        if (!axios.isAxiosError(generationError)) {
+          throw generationError
+        }
+
+        const legacyResponse = await chatService.generateLegacy(trimmedMessage || userMessage.text)
+        replyText =
+          extractModelText(legacyResponse.data) ||
+          extractMessage(legacyResponse.data, '')
+      }
+
+      const botMessage: ChatMessage = {
+        id: `${Date.now() + 1}`,
+        text:
+          replyText ||
+          buildFallbackBotMessage(userMessage.text, selectedDepartments, attachedFiles.length),
+        sender: 'bot',
+        timestamp: new Date(),
+      }
+
+      updateSessionMessages(sessionId, currentMessages => [...currentMessages, botMessage])
+    } catch (err) {
+      const fallback = buildFallbackBotMessage(
+        userMessage.text,
+        selectedDepartments,
+        attachedFiles.length,
+      )
+      setApiError(
+        axios.isAxiosError(err)
+          ? extractMessage(err.response?.data ?? err.message, 'Unable to reach the backend.')
+          : 'Unable to reach the backend.',
+      )
+      updateSessionMessages(sessionId, currentMessages => [
+        ...currentMessages,
+        {
+          id: `${Date.now() + 1}`,
+          text: fallback,
+          sender: 'bot',
+          timestamp: new Date(),
+        },
+      ])
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
     <div className="dashboard-container">
-      {/* Sidebar */}
       <aside className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-header">
           <div className="brand-logo">
             <Sparkles size={24} />
-            <span>PersonalChat</span>
+            <span>{appConfig.appName}</span>
           </div>
           <button
             className="sidebar-toggle"
@@ -232,33 +522,37 @@ export default function Dashboard() {
           New Chat
         </button>
 
-        <div className="chat-history">
+          <div className="chat-history">
           <div className="history-label">Chat History</div>
-          {chatSessions.map(session => (
-            <div
-              key={session.id}
-              className={`chat-item ${activeChatId === session.id ? 'active' : ''}`}
-              onClick={() => setActiveChatId(session.id)}
-            >
-              <MessageCircle size={16} />
-              <span className="chat-title">{session.title}</span>
-              <button
-                className="delete-chat-btn"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  deleteChat(session.id)
-                }}
+          {chatSessions.length === 0 ? (
+            <div className="empty-history">No chats yet. Start a new conversation.</div>
+          ) : (
+            chatSessions.map(session => (
+              <div
+                key={session.id}
+                className={`chat-item ${activeChatId === session.id ? 'active' : ''}`}
+                onClick={() => setActiveChatId(session.id)}
               >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
+                <MessageCircle size={16} />
+                <span className="chat-title">{session.title}</span>
+                <button
+                  className="delete-chat-btn"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    deleteChat(session.id)
+                  }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))
+          )}
         </div>
 
         <div className="sidebar-footer">
-          <button className="sidebar-btn">
+          <button className="sidebar-btn" onClick={handleToggleDarkMode}>
             <Settings size={18} />
-            <span>Settings</span>
+            <span>{darkModeEnabled ? 'Dark Mode: On' : 'Dark Mode: Off'}</span>
           </button>
           <button className="sidebar-btn">
             <Bell size={18} />
@@ -271,38 +565,42 @@ export default function Dashboard() {
         </div>
       </aside>
 
-      {/* Main Content */}
       <div className="main-content">
-        {/* Header */}
         <header className="dashboard-header">
           <button
             className="menu-toggle"
             onClick={() => setSidebarOpen(!sidebarOpen)}
           >
-            {sidebarOpen ? true : <Menu size={24} />}
+            <Menu size={24} />
           </button>
 
           <div className="header-center">
             <div className="brand-center">
               <Sparkles size={28} />
-              <span>PersonalChat</span>
+              <span>{appConfig.appName}</span>
             </div>
           </div>
 
-          <div className="header-profile">
+          <button
+            type="button"
+            className="header-profile profile-button"
+            onClick={() => setShowProfilePanel(true)}
+          >
             <div className="profile-info">
               <div className="avatar-circle">
                 {userName.charAt(0).toUpperCase()}
               </div>
               <div className="profile-text">
                 <div className="profile-name">{userName}</div>
-                <div className="profile-email">AI Assistant</div>
+                <div className="profile-email">
+                  {headerDepartment}
+                  {profileRole ? ` - ${profileRole}` : ''}
+                </div>
               </div>
             </div>
-          </div>
+          </button>
         </header>
 
-        {/* Chat Area */}
         <div className="chat-wrapper">
           <div
             className={`messages-container ${dragActive ? 'drag-active' : ''}`}
@@ -320,29 +618,26 @@ export default function Dashboard() {
                 <p>Select departments and ask your question</p>
                 <div className="empty-suggestions">
                   <div className="suggestion-item">
-                    "What's the status of my order?"
+                    {"What's the status of my order?"}
                   </div>
                   <div className="suggestion-item">
-                    "I need technical support"
+                    {'I need technical support'}
                   </div>
                   <div className="suggestion-item">
-                    "Can you review this document?"
+                    {'Can you review this document?'}
                   </div>
                 </div>
               </div>
             )}
 
             {messages.map(msg => (
-              <div
-                key={msg.id}
-                className={`message ${msg.sender}`}
-              >
+              <div key={msg.id} className={`message ${msg.sender}`}>
                 <div className="message-content">
                   <div className="message-text">{msg.text}</div>
                   {msg.files && msg.files.length > 0 && (
                     <div className="message-files">
-                      {msg.files.map((file, idx) => (
-                        <div key={idx} className="file-badge">
+                      {msg.files.map((file, index) => (
+                        <div key={index} className="file-badge">
                           <Upload size={12} />
                           {file}
                         </div>
@@ -374,54 +669,55 @@ export default function Dashboard() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input Area */}
           <div className="input-area">
-            {/* Department Selector */}
             <div className="department-selector">
               <div className="selector-label">Departments:</div>
               <div className="department-dropdown" ref={departmentDropdownRef}>
                 <button
                   className="dropdown-button"
+                  disabled={departments.length === 0}
                   onClick={() => setShowDepartmentMenu(!showDepartmentMenu)}
                 >
                   <span>
-                    {selectedDepartments.length === 1
+                    {departments.length === 0
+                      ? 'No departments'
+                      : selectedDepartments.length === 1
                       ? selectedDepartments[0]
                       : `${selectedDepartments.length} selected`}
                   </span>
                   <ChevronDown size={18} />
                 </button>
 
-                {showDepartmentMenu && (
+                {showDepartmentMenu && departments.length > 0 && (
                   <div className="dropdown-menu">
-                    {DEPARTMENTS.map(dept => (
-                      <label key={dept} className="dropdown-item">
-                        <input
-                          type="checkbox"
-                          checked={selectedDepartments.includes(dept)}
-                          onChange={() => toggleDepartment(dept)}
-                        />
-                        <span>{dept}</span>
-                      </label>
-                    ))}
+                    {departments.map(department => {
+                      const departmentName = department.name || `Department ${department.id}`
+                      return (
+                        <label key={department.id} className="dropdown-item">
+                          <input
+                            type="checkbox"
+                            checked={selectedDepartments.includes(departmentName)}
+                            onChange={() => toggleDepartment(departmentName)}
+                          />
+                          <span>{departmentName}</span>
+                        </label>
+                      )
+                    })}
                   </div>
                 )}
               </div>
             </div>
 
-            {/* File List (if any files selected) */}
             {files.length > 0 && (
               <div className="file-list-compact">
-                {files.map((file, idx) => (
-                  <div key={idx} className="file-badge-compact">
+                {files.map((file, index) => (
+                  <div key={index} className="file-badge-compact">
                     <span className="file-name-compact">
-                      {file.name.length > 25
-                        ? file.name.substring(0, 25) + '...'
-                        : file.name}
+                      {file.name.length > 25 ? `${file.name.substring(0, 25)}...` : file.name}
                     </span>
                     <button
                       type="button"
-                      onClick={() => removeFile(idx)}
+                      onClick={() => removeFile(index)}
                       className="remove-file-compact"
                     >
                       <X size={14} />
@@ -431,9 +727,7 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Message Input Form with Model Selector and File Upload */}
             <form className="message-input-form" onSubmit={handleSendMessage}>
-              {/* File Upload Button */}
               <div
                 className={`file-upload-compact ${dragActive ? 'drag-active' : ''}`}
                 onDragEnter={handleDrag}
@@ -459,7 +753,6 @@ export default function Dashboard() {
                 />
               </div>
 
-              {/* Message Input */}
               <input
                 type="text"
                 placeholder="Type your message here..."
@@ -469,7 +762,6 @@ export default function Dashboard() {
                 className="message-input"
               />
 
-              {/* Model Selector Dropdown */}
               <div className="model-dropdown-compact" ref={modelDropdownRef}>
                 <button
                   type="button"
@@ -483,7 +775,7 @@ export default function Dashboard() {
 
                 {showModelMenu && (
                   <div className="model-menu">
-                    {MODEL_OPTIONS.map(model => (
+                    {MODEL_OPTIONS.map((model: string) => (
                       <button
                         key={model}
                         type="button"
@@ -500,7 +792,6 @@ export default function Dashboard() {
                 )}
               </div>
 
-              {/* Send Button */}
               <button
                 type="submit"
                 disabled={loading || (!inputValue.trim() && files.length === 0)}
@@ -509,9 +800,90 @@ export default function Dashboard() {
                 <Send size={20} />
               </button>
             </form>
+
+            {apiError && <div className="catalog-message">{apiError}</div>}
           </div>
         </div>
       </div>
+
+      {showProfilePanel && (
+        <div className="profile-overlay" onClick={() => setShowProfilePanel(false)}>
+          <div className="profile-panel" onClick={event => event.stopPropagation()}>
+            <div className="profile-panel-header">
+              <div>
+                <h3>Edit Profile</h3>
+                <p>Update the details used across the app.</p>
+              </div>
+              <button
+                type="button"
+                className="profile-close-btn"
+                onClick={() => setShowProfilePanel(false)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="profile-field">
+              <label htmlFor="profileName">Full name</label>
+              <input
+                id="profileName"
+                type="text"
+                value={profileName}
+                onChange={event => setProfileName(event.target.value)}
+              />
+            </div>
+
+            <div className="profile-field">
+              <label htmlFor="profileEmail">Email</label>
+              <input
+                id="profileEmail"
+                type="email"
+                value={profileEmail}
+                onChange={event => setProfileEmail(event.target.value)}
+              />
+            </div>
+
+            <div className="profile-field-grid">
+              <div className="profile-field">
+                <label htmlFor="profileDepartment">Department</label>
+                <input
+                  id="profileDepartment"
+                  type="text"
+                  value={profileDepartment}
+                  onChange={event => setProfileDepartment(event.target.value)}
+                />
+              </div>
+
+              <div className="profile-field">
+                <label htmlFor="profileRole">Role</label>
+                <input
+                  id="profileRole"
+                  type="text"
+                  value={profileRole}
+                  onChange={event => setProfileRole(event.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="profile-actions">
+              <button
+                type="button"
+                className="profile-secondary-btn"
+                onClick={() => setShowProfilePanel(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="profile-primary-btn"
+                onClick={handleSaveProfile}
+              >
+                Save changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

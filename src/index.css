@@ -11,6 +11,7 @@ html, body {
 }
 
 :root {
+  color-scheme: dark;
   --primary: #3b82f6;
   --primary-dark: #1e40af;
   --secondary: #8b5cf6;
@@ -24,6 +25,37 @@ html, body {
   --text-secondary: #cbd5e1;
   --text-tertiary: #94a3b8;
   --border-color: #334155;
+  --surface: rgba(15, 23, 42, 0.78);
+  --surface-soft: rgba(15, 23, 42, 0.58);
+  --surface-elevated: rgba(30, 58, 95, 0.68);
+  --surface-overlay: rgba(15, 23, 42, 0.96);
+  --accent-soft: rgba(59, 130, 246, 0.12);
+  --accent-glow: rgba(59, 130, 246, 0.2);
+  --shadow-lg: 0 24px 60px rgba(15, 23, 42, 0.35);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --primary: #2563eb;
+  --primary-dark: #1d4ed8;
+  --secondary: #7c3aed;
+  --success: #059669;
+  --danger: #dc2626;
+  --warning: #d97706;
+  --bg-primary: #f4f7fb;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #eef2ff;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-tertiary: #64748b;
+  --border-color: #dbe4f0;
+  --surface: rgba(255, 255, 255, 0.88);
+  --surface-soft: rgba(248, 250, 252, 0.92);
+  --surface-elevated: rgba(255, 255, 255, 0.96);
+  --surface-overlay: rgba(255, 255, 255, 0.98);
+  --accent-soft: rgba(37, 99, 235, 0.09);
+  --accent-glow: rgba(37, 99, 235, 0.16);
+  --shadow-lg: 0 20px 45px rgba(15, 23, 42, 0.12);
 }
 
 body {
@@ -35,6 +67,8 @@ body {
   background: var(--bg-primary);
   color: var(--text-primary);
   line-height: 1.6;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 input, textarea, select, button {
