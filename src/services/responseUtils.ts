@@ -109,6 +109,6 @@ export const extractAuthSession = (value: unknown): AuthSession => {
 
 export const extractModelText = (value: unknown, fallback = '') => {
   if (typeof value === 'string') return value
-  const maybeText = getObjectValue(value, ['reply', 'response', 'text', 'output', 'message'])
+  const maybeText = getObjectValue(value, ['reply', 'response', 'text', 'output', 'data', 'message'])
   return typeof maybeText === 'string' ? maybeText : fallback
 }

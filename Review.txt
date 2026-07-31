@@ -4,22 +4,6 @@ It is not asking for login, directly getting logged in
 selection of ai agent looks good
 
 
-
-8th Feb 2026 - Review
-
-Onboarding Process for Company
-Registration Page
-Add CompanyId
-Add DeptId
-Add username
-Admin Should be able to select departments
-Need to figure out for admin user, and also special access for different users
-Login Page
-Need to implement token extraction for company Id and department id.
-Need to call backend login page and in the backend need to store in the separate table
-Need to show login user name on top right (currently showing just user)
-#################### the above points need discussion ####################
-
 #################### Done ####################
 Chat =>
  i. Done - Should be able to select different models
@@ -35,5 +19,23 @@ Chat =>
 
 
 
+#################### the below points need discussion ####################
 
+Onboarding Process for Company
+Registration Page
+Add CompanyId
+Add DeptId
+Add username
+Admin Should be able to select departments
+Need to figure out for admin user, and also special access for different users
+Need to discuss the flow completely just basic version1 of the product.
 
+#################### fix below UI points ####################
+- few ui issue need to fix manually,
+- few css issue need to fix manually,
+- for now the client is as dev product need alter required modification for uat and prod.
+
+#################### Backend points ####################
+- chat history api does not work as expected and did not have history data at all, there is a nested data repeated.
+- chat found there are three api with same params and issue.
+- need to discuss more about the settings.
