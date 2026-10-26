@@ -59,6 +59,10 @@ export default function LoginPage() {
         userId: session.userId || appConfig.defaults.userId,
         userName: session.userName || username,
         userEmail: session.userEmail || username,
+        departmentName: session.departmentName,
+        roleName: session.roleName,
+        isAdmin: session.isAdmin,
+        refreshToken: session.refreshToken,
       })
 
       navigate('/dashboard')

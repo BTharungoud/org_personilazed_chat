@@ -576,17 +576,16 @@
 
 .dropdown-menu {
   position: absolute;
-  top: 100%;
+  bottom: calc(100% + 6px);
   left: 0;
   right: 0;
   background: var(--surface-overlay);
   backdrop-filter: blur(10px);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  margin-top: 4px;
   z-index: 100;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  max-height: 250px;
+  max-height: min(250px, 35vh);
   overflow-y: auto;
 }
 
