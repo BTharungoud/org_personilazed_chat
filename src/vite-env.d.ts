@@ -5,6 +5,8 @@ interface ImportMetaEnv {
   readonly API_BASE_URL?: string
   readonly API_JWT_TOKEN?: string
   readonly API_TIMEOUT_MS?: string
+  readonly API_AI_TIMEOUT_MS?: string
+  readonly API_UPLOAD_TIMEOUT_MS?: string
   readonly DEFAULT_AGENT_MODEL?: string
 }
 
@@ -17,5 +19,7 @@ declare const __APP_CONFIG__: {
   API_BASE_URL?: string
   API_JWT_TOKEN?: string
   API_TIMEOUT_MS?: string
+  API_AI_TIMEOUT_MS?: string
+  API_UPLOAD_TIMEOUT_MS?: string
   DEFAULT_AGENT_MODEL?: string
 }

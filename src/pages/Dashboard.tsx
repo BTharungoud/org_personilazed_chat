@@ -61,10 +61,10 @@ const toDate = (value: unknown) => {
   return Number.isNaN(parsed.getTime()) ? new Date() : parsed
 }
 
-const normalizeHistoryMessages = (
-  messages: Array<Record<string, unknown>> | undefined,
+const normalizeNestedHistoryMessages = (
+  messages: Array<Record<string, unknown>>,
 ): ChatMessage[] =>
-  (messages ?? []).map((message, index) => {
+  messages.map((message, index) => {
     const senderValue = String(message.sender ?? message.role ?? '').toLowerCase()
     return {
       id: String(message.id ?? index),
@@ -75,6 +75,36 @@ const normalizeHistoryMessages = (
     }
   })
 
+const normalizeHistoryMessages = (record: ChatHistoryRecord): ChatMessage[] => {
+  if (record.messages?.length) {
+    return normalizeNestedHistoryMessages(record.messages)
+  }
+
+  const messages: ChatMessage[] = []
+  const recordId = String(record.id ?? 'history')
+  const query = typeof record.query === 'string' ? record.query.trim() : ''
+  const response = typeof record.response === 'string' ? record.response.trim() : ''
+
+  if (query) {
+    messages.push({
+      id: `${recordId}-user`,
+      text: query,
+      sender: 'user',
+      timestamp: toDate(record.createdAt ?? record.timestamp),
+    })
+  }
+  if (response) {
+    messages.push({
+      id: `${recordId}-assistant`,
+      text: response,
+      sender: 'bot',
+      timestamp: toDate(record.updatedAt ?? record.createdAt ?? record.timestamp),
+    })
+  }
+
+  return messages
+}
+
 const normalizeChatSessions = (records: ChatHistoryRecord[]) => {
   if (records.length === 0) {
     return []
@@ -83,10 +113,10 @@ const normalizeChatSessions = (records: ChatHistoryRecord[]) => {
   return records.map((record, index) => ({
     id: String(record.id ?? index + 1),
     title:
-      String(record.title ?? record.subject ?? record.name ?? '').trim() ||
+      String(record.title ?? record.subject ?? record.name ?? record.query ?? '').trim() ||
       `Conversation ${index + 1}`,
     timestamp: toDate(record.updatedAt ?? record.createdAt ?? record.timestamp),
-    messages: normalizeHistoryMessages(record.messages),
+    messages: normalizeHistoryMessages(record),
   }))
 }
 
@@ -442,29 +472,16 @@ export default function Dashboard() {
         await chatService.ingestMultipleFiles(attachedFiles)
       }
 
-      let replyText = ''
+      const generationResponse = await chatService.generate({
+        userId,
+        message: trimmedMessage || userMessage.text,
+        agentSelected: selectedModel,
+        category: selectedDepartmentLabel,
+      })
 
-      try {
-        const generationResponse = await chatService.generate({
-          userId,
-          message: trimmedMessage || userMessage.text,
-          agentSelected: selectedModel,
-          category: selectedDepartmentLabel,
-        })
-
-        replyText =
-          extractModelText(generationResponse.data) ||
-          extractMessage(generationResponse.data, '')
-      } catch (generationError) {
-        if (!axios.isAxiosError(generationError)) {
-          throw generationError
-        }
-
-        const legacyResponse = await chatService.generateLegacy(trimmedMessage || userMessage.text)
-        replyText =
-          extractModelText(legacyResponse.data) ||
-          extractMessage(legacyResponse.data, '')
-      }
+      const replyText =
+        extractModelText(generationResponse.data) ||
+        extractMessage(generationResponse.data, '')
 
       const botMessage: ChatMessage = {
         id: `${Date.now() + 1}`,

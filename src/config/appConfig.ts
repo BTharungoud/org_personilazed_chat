@@ -16,7 +16,9 @@ export const appConfig = {
     baseUrl: normalizeBaseUrl(
       getEnvString(runtimeConfig.API_BASE_URL, 'https://cf8vd512-8081.euw.devtunnels.ms'),
     ),
-    timeoutMs: getEnvNumber(runtimeConfig.API_TIMEOUT_MS, 15000),
+    timeoutMs: getEnvNumber(runtimeConfig.API_TIMEOUT_MS, 30000),
+    aiTimeoutMs: getEnvNumber(runtimeConfig.API_AI_TIMEOUT_MS, 90000),
+    uploadTimeoutMs: getEnvNumber(runtimeConfig.API_UPLOAD_TIMEOUT_MS, 600000),
     jwtToken: getEnvString(runtimeConfig.API_JWT_TOKEN, ''),
   },
   defaults: {

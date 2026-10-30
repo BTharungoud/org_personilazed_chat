@@ -31,7 +31,9 @@ export default defineConfig(function (_a) {
         APP_NAME: env.APP_NAME || 'Org Per Chat',
         API_BASE_URL: env.API_BASE_URL || 'https://cf8vd512-8081.euw.devtunnels.ms',
         API_JWT_TOKEN: env.API_JWT_TOKEN || '',
-        API_TIMEOUT_MS: env.API_TIMEOUT_MS || '15000',
+        API_TIMEOUT_MS: env.API_TIMEOUT_MS || '30000',
+        API_AI_TIMEOUT_MS: env.API_AI_TIMEOUT_MS || '90000',
+        API_UPLOAD_TIMEOUT_MS: env.API_UPLOAD_TIMEOUT_MS || '600000',
         DEFAULT_AGENT_MODEL: env.DEFAULT_AGENT_MODEL || 'gemini-2.5-flash-lite',
         DEFAULT_ORGANIZATION_ID: env.DEFAULT_ORGANIZATION_ID || '1',
     };
